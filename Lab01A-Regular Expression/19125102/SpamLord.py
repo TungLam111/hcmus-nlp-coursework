@@ -1,0 +1,247 @@
+import email
+import sys
+import os
+import re
+import pprint
+
+emailReg = []
+passwordReg = []
+
+# ashishg
+'''something @ something.something'''
+'''something @ something.something.something'''
+'''something@something.something'''
+'''something@something.something.something'''
+
+emailReg.append('([A-Za-z\.-]+)\s@\s([A-Za-z.]+)\.(edu|com|org)')
+emailReg.append('([A-Za-z\.-]+)\s@\s([A-Za-z.]+)\.([A-Za-z]+)\.(edu|com|org)')
+
+# balaji (as ashishg)
+
+# bgirod (not exist) (ok)
+
+# cheriton
+'''something at sth.sth'''
+'''something at sth.sth.sth'''
+emailReg.append('([A-Za-z\.-]+)\sat\s([A-Za-z\-]+)\.(edu|org|com)')
+emailReg.append('([A-Za-z\.-]+)\sat\s([A-Za-z\-]+)\.([A-Za-z]+)\.(edu|org|com)')
+
+# dabo (ok)
+# dlwh
+'''d-l-w-h-@-s-t-a-n-f-o-r-d-.-e-d-u'''
+# We need to remove '-' between characters
+emailReg.append('([A-Za-z\-.]+)@([A-Za-z.\-]+)\.([A-Za-z\-]+)')
+
+# engler (as ashishg) (ok)
+'''engler WHERE stanford DOM edu'''
+emailReg.append('([A-Za-z\.-]+)\sWHERE\s([A-Za-z]+)\sDOM\s(edu|org|com)')
+
+# eroberts (ok)
+# fedkiw (ok)
+# hanrahan (ok)
+# horowitz (not exist) (ok)
+# jks (ok)
+'''something at something;something;something'''
+emailReg.append('([A-Za-z\.-]+)\sat\s([A-Za-z]+)\;([A-Za-z]+)\;([A-Za-z]+)')
+
+# jurafsky
+'''obfuscate('stanford.edu','jurafsky')'''
+emailReg.append('obfuscate\(\'([A-Za-z]+)\.([A-Za-z]+)\'\,\'([A-Za-z]+)\'\)')
+
+# kosecka (ok)
+# kunle (ok) 
+# lam (ok)
+# latombe (ok)
+# levoy
+'''ada&#x40;graphics.stanford.edu'''
+'''melissa&#x40;graphics.stanford.edu'''
+emailReg.append('([A-Za-z\.-]+)\&\#x40\;([A-Za-z]+)\.([A-Za-z]+)\.(edu|com|org)')
+
+# manning (ok)
+# nass (ok)
+# nick (ok)
+# ok (not exist) (ok)
+# ouster (ok)
+'''ouster (followed by &ldquo;@cs.stanford.edu&rdquo;)'''
+'''teresa.lynn (followed by "@stanford.edu")'''
+emailReg.append('([A-Za-z\.-]+)\s\(followed by \&ldquo\;@([A-Za-z\-]+)\.([A-Za-z]+)\.?([A-Za-z]{2,})?\&rdquo\;\)')
+emailReg.append('([A-Za-z\.-]+)\s\(followed by \"@([A-Za-z\-]+)\.([A-Za-z]+)\"\)')
+
+# psyoung (ok)
+# rajeev (ok)
+# rinard (ok)
+# shoham (ok)
+# thm (ok)
+# tim (ok)
+
+# serafim
+'''sth at sth dot sth dot sth'''
+'''sth at sth dot sth'''
+emailReg.append('([A-Za-z\.-]+)\sat\s([A-Za-z]+)\sdot\s(edu|com|org)')
+emailReg.append('([A-Za-z\.-]+)\sat\s([A-Za-z]+)\sdot\s([A-Za-z]+)\sdot\s(edu|com|org)')
+
+# subh (as serafim)
+# hager (as serafim)
+# vladlen (as serafim)
+'''vladlen%20at%20stanford%20dot%20edu'''
+emailReg.append('([A-Za-z\.-]+)\%\d+at\%\d+([A-Za-z]+)\%\d+dot\%\d+([A-Za-z]+)')
+
+# ullman 
+'''support at gradiance dt com'''
+emailReg.append('([A-Za-z\.-]+)\sat\s([A-Za-z]+)\sdt\s([A-Za-z]+)')
+
+# pal
+'''sth at sth sth sth'''
+emailReg.append('([A-Za-z\.-]+)\sat\s(?!dot|dt)([A-Za-z]+)\s(edu|com|org)[^A-Za-z]')
+emailReg.append('([A-Za-z\.-]+)\sat\s(?!dot|dt)([A-Za-z]+)\s(?!dot|dt)([A-Za-z]+)\s(edu|com|org)[^A-Za-z]')
+
+# widom
+'''widom@<!--die!-->cs <!-- spam pigs!--> stanford <!-- die --> edu'''
+emailReg.append('([A-Za-z\.-]+)@<!--die!-->([A-Za-z]+)\s<!-- spam pigs!-->\s([A-Za-z]+)\s<!-- die -->\s(edu|com|org)')
+
+# zelenski (ok)
+# zm (ok)
+
+# standard case
+passwordReg.append('(\d{3})\-(\d{3})\-(\d{4})')
+passwordReg.append('\((\d{3})\)(\d{3})\-(\d{4})')
+passwordReg.append('\((\d{3})\)\s(\d{3})\-(\d{4})')
+passwordReg.append('(\d{3})\s(\d{3})\s(\d{4})')
+passwordReg.append('(\d{3})\s(\d{3})-(\d{4})')
+
+""" 
+TODO
+This function takes in a filename along with the file object (actually
+a StringIO object at submission time) and
+scans its contents against regex patterns. It returns a list of
+(filename, type, value) tuples where type is either an 'e' or a 'p'
+for e-mail or phone, and value is the formatted phone number or e-mail.
+The canonical formats are:
+     (name, 'p', '###-###-#####')
+     (name, 'e', 'someone@something')
+If the numbers you submit are formatted differently they will not
+match the gold answers
+
+NOTE: ***don't change this interface***, as it will be called directly by
+the submit script
+
+NOTE: You shouldn't need to worry about this, but just so you know, the
+'f' parameter below will be of type StringIO at submission time. So, make
+sure you check the StringIO interface if you do anything really tricky,
+though StringIO should support most everything.
+"""
+def process_file(name, f):
+    # note that debug info should be printed to stderr
+    # sys.stderr.write('[process_file]\tprocessing file: %s\n' % (path))
+    res = []
+    for line in f:
+        for email_pattern in emailReg:
+            matches = re.findall(email_pattern,line)
+            for m in matches:
+                if m[0] == 'server' or m[0] == 'Server':
+                    break
+                if 'obfuscate' in email_pattern:
+                    email = '{}@{}.{}'.format(m[2], m[0], m[1])
+                    res.append((name, 'e', email))
+                elif m[0][len(m[0]) - 1] == '-' :
+                    email = '{}@{}.{}'.format(m[0].replace('-',''), m[1].replace('-',''), m[2].replace('-',''))
+                    res.append((name, 'e', email))
+                else: 
+                    if (len(m) == 3):
+                        email = '%s@%s.%s' % m
+                        res.append((name,'e',email))
+                    elif len(m) == 4 and m[3] != '' :
+                        email = '%s@%s.%s.%s' % m 
+                        res.append((name,'e',email))
+                    elif len(m) == 4 and m[3] == '':
+                        email = '{}@{}.{}'.format(m[0], m[1], m[2])
+                        res.append((name,'e',email))             
+
+        for password_pattern in passwordReg:
+            matches = re.findall(password_pattern,line)
+            for m in matches:
+                phone = '%s-%s-%s' % m
+                res.append((name,'p',phone))
+
+    return res
+
+"""
+You should not need to edit this function, nor should you alter
+its interface as it will be called directly by the submit script
+"""
+def process_dir(data_path):
+    # get candidates
+    guess_list = []
+    for fname in os.listdir(data_path):
+        if fname[0] == '.':
+            continue
+        path = os.path.join(data_path,fname)
+        f = open(path,'r')
+        f_guesses = process_file(fname, f)
+        guess_list.extend(f_guesses)
+    return guess_list
+
+"""
+You should not need to edit this function.
+Given a path to a tsv file of gold e-mails and phone numbers
+this function returns a list of tuples of the canonical form:
+(filename, type, value)
+"""
+def get_gold(gold_path):
+    # get gold answers
+    gold_list = []
+    f_gold = open(gold_path,'r')
+    for line in f_gold:
+        gold_list.append(tuple(line.strip().split('\t')))
+    return gold_list
+
+"""
+You should not need to edit this function.
+Given a list of guessed contacts and gold contacts, this function
+computes the intersection and set differences, to compute the true
+positives, false positives and false negatives.  Importantly, it
+converts all of the values to lower case before comparing
+"""
+def score(guess_list, gold_list):
+    guess_list = [(fname, _type, value.lower()) for (fname, _type, value) in guess_list]
+    gold_list = [(fname, _type, value.lower()) for (fname, _type, value) in gold_list]
+    guess_set = set(guess_list)
+    gold_set = set(gold_list)
+
+    tp = guess_set.intersection(gold_set)
+    fp = guess_set - gold_set
+    fn = gold_set - guess_set
+
+    pp = pprint.PrettyPrinter()
+    #print 'Guesses (%d): ' % len(guess_set)
+    #pp.pprint(guess_set)
+    #print 'Gold (%d): ' % len(gold_set)
+    #pp.pprint(gold_set)
+    print( 'True Positives (%d): ' % len(tp))
+    pp.pprint(tp)
+    print( 'False Positives (%d): ' % len(fp))
+    pp.pprint(fp)
+    print('False Negatives (%d): ' % len(fn))
+    pp.pprint(fn)
+    print( 'Summary: tp=%d, fp=%d, fn=%d' % (len(tp),len(fp),len(fn)))
+
+"""
+You should not need to edit this function.
+It takes in the string path to the data directory and the
+gold file
+"""
+def main(data_path, gold_path):
+    guess_list = process_dir(data_path)
+    gold_list =  get_gold(gold_path)
+    score(guess_list, gold_list)
+
+"""
+commandline interface takes a directory name and gold file.
+It then processes each file within that directory and extracts any
+matching e-mails or phone numbers and compares them to the gold file
+"""
+if __name__ == '__main__':
+    if (len(sys.argv) != 3):
+        print('usage:\tSpamLord.py <data_dir> <gold_file>')
+        sys.exit(0)
+    main(sys.argv[1],sys.argv[2])
